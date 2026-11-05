@@ -6,19 +6,23 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "check": "tsc --noEmit",
-    "test": "gjs test-status.js",
+    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:gjs": "gjs test-status.js",
     "watch": "node build.mjs --watch"
   },
   "devDependencies": {
+    "@girs/adw-1": "^5.6.0",
+    "@girs/gio-2.0": "^5.6.0",
     "@girs/gjs": "^5.6.0",
     "@girs/glib-2.0": "^5.6.0",
-    "@girs/gio-2.0": "^5.6.0",
     "@girs/gnome-shell": "^51.0.1",
     "@girs/gtk-4.0": "^5.6.0",
-    "@girs/adw-1": "^5.6.0",
     "@girs/soup-3.0": "^5.6.0",
+    "@types/node": "^26.6.6",
     "esbuild": "^0.25.0",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
   }
 }

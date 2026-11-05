@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Unit tests run under Node + Vitest, so Node ambient types are available
+    // here (Buffer, URLSearchParams, node:*) — but deliberately not in the
+    // src/ program.
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+}

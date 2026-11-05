@@ -21,7 +21,9 @@ Built with **TypeScript** (bundled to GJS ESM via esbuild) for **GNOME Shell 51*
 ```sh
 npm install
 npm run check        # type-check with tsc (no emit)
-npm test             # GJS unit tests for the status logic
+npm test             # unit tests (vitest, runs under Node)
+npm run test:watch   # unit tests in watch mode
+npm run test:gjs     # GJS smoke test for the compiled status logic
 npm run build        # → dist/extension.js, dist/prefs.js, dist/status-test.js
 ./install.sh         # stages into ~/.local/share/gnome-shell/extensions/
 gnome-extensions enable bamboo-timesheet@user
