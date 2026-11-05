@@ -13,7 +13,7 @@ import {
   PopupSeparatorMenuItem,
 } from "@girs/gnome-shell/ui/popupMenu";
 import { BambooClient } from "./lib/bamboohr.js";
-import { getSettings, loadSettings } from "./lib/settings.js";
+import { getSettings, loadSettings, SettingsKeys } from "./lib/settings.js";
 import {
   formatDuration,
   formatHours,
@@ -28,10 +28,10 @@ import type { ClockEntry } from "./lib/types.js";
 const PANEL_ROLE = "bamboo-timesheet";
 
 /**
- * Data + label refresh cadence in seconds. Phase 5 switches this to the
- * settings-driven 60s-in / 300s-out intervals.
+ * Floor for the settings-driven refresh intervals; a zero/negative interval
+ * would arm a zero-second timeout and hammer the API in a busy loop.
  */
-const REFRESH_INTERVAL_SECONDS = 60;
+const MIN_REFRESH_INTERVAL_SECONDS = 5;
 
 /** Maximum characters of an error message shown in the popup header. */
 const MAX_ERROR_LENGTH = 90;
@@ -244,8 +244,17 @@ export default class BambooTimesheetExtension extends Extension {
   // True once a fetch has succeeded; the popup stays in its "Refreshing…"
   // placeholder state until then.
   #fetched = false;
-  #busy = false;
+  // Guards overlapping clock-in/out POSTs; overlapping refreshes are instead
+  // superseded via cancellables in #refresh.
+  #actionBusy = false;
+  // Clock-in state of the last render; picks the timer interval in #armTimer.
+  #clockedIn = false;
+  // Cancellable of the in-flight refresh flow. A newer refresh (or disable())
+  // cancels it so a stale response can never land after and overwrite a
+  // fresher one.
+  #refreshCancellable: Gio.Cancellable | null = null;
   #tickSource = 0;
+  #menuOpenId = 0;
 
   override enable(): void {
     const settings = loadSettings();
@@ -269,7 +278,9 @@ export default class BambooTimesheetExtension extends Extension {
     this.#entries = [];
     this.#lastError = null;
     this.#fetched = false;
-    this.#busy = false;
+    this.#actionBusy = false;
+    this.#clockedIn = false;
+    this.#refreshCancellable = null;
 
     this.#indicator = new BambooIndicator();
     this.#indicator.setActions({
@@ -279,18 +290,17 @@ export default class BambooTimesheetExtension extends Extension {
     });
     Main.panel.addToStatusArea(PANEL_ROLE, this.#indicator);
 
-    this.#tickSource = GLib.timeout_add_seconds(
-      GLib.PRIORITY_DEFAULT,
-      REFRESH_INTERVAL_SECONDS,
-      () => {
-        // Re-render locally so durations keep ticking even if the fetch is
-        // slow, then pull fresh data from the API.
-        this.#updateUi();
-        void this.#refresh();
-        return GLib.SOURCE_CONTINUE;
-      },
-    );
+    // Refresh whenever the popup opens so the rows and the live total are
+    // current without waiting for the next timer tick. `Button.menu` is a
+    // union (shell PopupMenu | dummy) — cast like the indicator does.
+    const menu = this.#indicator.menu as PopupMenu;
+    this.#menuOpenId = menu.connect("open-state-changed", (_menu, open) => {
+      if (!open) return;
+      this.#updateUi();
+      void this.#refresh();
+    });
 
+    this.#armTimer();
     void this.#refresh();
   }
 
@@ -299,11 +309,17 @@ export default class BambooTimesheetExtension extends Extension {
       GLib.source_remove(this.#tickSource);
       this.#tickSource = 0;
     }
+    if (this.#menuOpenId !== 0) {
+      this.#indicator?.menu.disconnect(this.#menuOpenId);
+      this.#menuOpenId = 0;
+    }
+    // Cancel any in-flight request before dropping the session.
+    this.#refreshCancellable?.cancel();
+    this.#refreshCancellable = null;
     // Destroying the indicator removes it from the panel and destroys the menu
     // (including all item signal connections).
     this.#indicator?.destroy();
     this.#indicator = null;
-    // Cancel any in-flight request before dropping the session.
     this.#client?.abort();
     this.#client = null;
     this.#settings = null;
@@ -312,15 +328,20 @@ export default class BambooTimesheetExtension extends Extension {
     this.#entries = [];
     this.#lastError = null;
     this.#fetched = false;
-    this.#busy = false;
+    this.#actionBusy = false;
+    this.#clockedIn = false;
   }
 
   async #refresh(): Promise<void> {
     const client = this.#client;
-    if (!client || this.#busy) return;
-    this.#busy = true;
+    if (!client) return;
+    // Supersede any in-flight refresh: cancel its token so its response can
+    // never land after ours and overwrite fresher data with stale state.
+    this.#refreshCancellable?.cancel();
+    const cancellable = new Gio.Cancellable();
+    this.#refreshCancellable = cancellable;
     try {
-      const employeeId = await this.#resolveEmployeeId(client);
+      const employeeId = await this.#resolveEmployeeId(client, cancellable);
       const now = new Date();
       // A 48h window so an entry opened yesterday but still running is
       // included; "today" is then filtered per entry in the entry's timezone.
@@ -331,24 +352,38 @@ export default class BambooTimesheetExtension extends Extension {
       to.setDate(to.getDate() + 1);
       to.setHours(23, 59, 59, 999);
 
-      const { data } = await client.listClockEntries(employeeId, from, to);
+      const { data } = await client.listClockEntries(
+        employeeId,
+        from,
+        to,
+        cancellable,
+      );
+      if (cancellable.is_cancelled()) return;
       this.#entries = data;
       this.#lastError = null;
       this.#fetched = true;
     } catch (err) {
+      // Cancelled means superseded by a newer refresh or the extension was
+      // disabled — the winner owns the UI, so don't surface the error.
+      if (cancellable.is_cancelled()) return;
       this.#lastError = err instanceof Error ? err.message : String(err);
       console.warn(`[bamboo-timesheet] refresh failed: ${this.#lastError}`);
     } finally {
-      this.#busy = false;
+      if (this.#refreshCancellable === cancellable) {
+        this.#refreshCancellable = null;
+      }
     }
     this.#updateUi();
+    this.#armTimer();
   }
 
   async #toggleClock(): Promise<void> {
     const client = this.#client;
-    if (!client || this.#busy) return;
+    // Only guards against concurrent clock-in/out POSTs; a refresh in flight
+    // is superseded by the one this action triggers below.
+    if (!client || this.#actionBusy) return;
     const clockedIn = summarizeToday(this.#entries, new Date()).clockedIn;
-    this.#busy = true;
+    this.#actionBusy = true;
     try {
       const employeeId = await this.#resolveEmployeeId(client);
       if (employeeId <= 0) {
@@ -368,12 +403,16 @@ export default class BambooTimesheetExtension extends Extension {
       console.warn(
         `[bamboo-timesheet] clock ${clockedIn ? "out" : "in"} failed: ${message}`,
       );
-      Main.notifyError(
-        "BambooHR",
-        `Clock ${clockedIn ? "out" : "in"} failed: ${message}`,
-      );
+      // Skip the notification when disabled mid-flight: the session abort
+      // surfaces a cancelled request, which is not worth a popup on logout.
+      if (this.#client) {
+        Main.notifyError(
+          "BambooHR",
+          `Clock ${clockedIn ? "out" : "in"} failed: ${message}`,
+        );
+      }
     } finally {
-      this.#busy = false;
+      this.#actionBusy = false;
     }
     await this.#refresh();
   }
@@ -392,11 +431,49 @@ export default class BambooTimesheetExtension extends Extension {
   }
 
   /** Employee id from settings (0 = auto-detect), resolved once via the API. */
-  async #resolveEmployeeId(client: BambooClient): Promise<number> {
+  async #resolveEmployeeId(
+    client: BambooClient,
+    cancellable?: Gio.Cancellable,
+  ): Promise<number> {
     if (this.#employeeId > 0) return this.#employeeId;
-    const me = await client.getSelf();
+    const me = await client.getSelf(cancellable);
     this.#employeeId = Number(me.id) || 0;
     return this.#employeeId;
+  }
+
+  /**
+   * (Re)start the one-shot refresh timer: `refresh-interval-in` while clocked
+   * in (keeps the live total ticking) and `refresh-interval-out` otherwise.
+   * Called after every refresh attempt — success or failure — so the next
+   * cycle picks up interval or clock-state changes.
+   */
+  #armTimer(): void {
+    if (this.#tickSource !== 0) {
+      GLib.source_remove(this.#tickSource);
+      this.#tickSource = 0;
+    }
+    const settings = this.#settings;
+    // Disabled: don't schedule anything (disable() has cleared the sources).
+    if (!settings) return;
+    const key = this.#clockedIn
+      ? SettingsKeys.RefreshIntervalIn
+      : SettingsKeys.RefreshIntervalOut;
+    const seconds = Math.max(
+      MIN_REFRESH_INTERVAL_SECONDS,
+      settings.get_int(key),
+    );
+    this.#tickSource = GLib.timeout_add_seconds(
+      GLib.PRIORITY_DEFAULT,
+      seconds,
+      () => {
+        this.#tickSource = 0;
+        // Re-render locally so durations keep ticking even if the fetch is
+        // slow, then pull fresh data; #refresh re-arms this timer.
+        this.#updateUi();
+        void this.#refresh();
+        return GLib.SOURCE_REMOVE;
+      },
+    );
   }
 
   #updateUi(): void {
@@ -405,6 +482,8 @@ export default class BambooTimesheetExtension extends Extension {
     const summary = this.#fetched
       ? summarizeToday(this.#entries, new Date())
       : null;
+    // Feeds #armTimer: clocked in → fast cadence, otherwise slow.
+    this.#clockedIn = summary?.clockedIn ?? false;
     indicator.update(summary, this.#lastError);
   }
 }

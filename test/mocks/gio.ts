@@ -18,9 +18,24 @@ export function setSchemaLookup(fn: SchemaLookup): void {
 
 class Cancellable {
   #cancelled = false;
+  #handlers = new Map<number, () => void>();
+  #nextId = 1;
 
   cancel(): void {
     this.#cancelled = true;
+    for (const handler of this.#handlers.values()) handler();
+    this.#handlers.clear();
+  }
+
+  /** GObject-style signal connection; only "cancelled" is meaningful here. */
+  connect(_signal: string, callback: () => void): number {
+    const id = this.#nextId++;
+    this.#handlers.set(id, callback);
+    return id;
+  }
+
+  disconnect(id: number): void {
+    this.#handlers.delete(id);
   }
 
   is_cancelled(): boolean {

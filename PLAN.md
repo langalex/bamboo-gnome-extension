@@ -157,14 +157,19 @@ bamboo_gnome_extension/
   GJS dispatches `_init` before subclass field initializers run, so fields with
   initializers would clobber values assigned in `_init`.
 
-**Phase 5 — Refresh & lifecycle**
-
-**Phase 5 — Refresh & lifecycle**
+**Phase 5 — Refresh & lifecycle ✅**
 
 - `GLib.timeout_add_seconds`: 60s while clocked in (keeps total ticking),
   300s otherwise; refresh on popup open and after actions; guard against
   overlapping requests with `Gio.Cancellable`; clean up all sources + disconnect
   signals in `disable()`.
+
+  Implemented as a one-shot timer re-armed after every refresh attempt
+  (success or failure) with the interval for the current clock state, so
+  interval/clock-state changes take effect on the next cycle. Refreshes are
+  superseded via a `Gio.Cancellable` chained into the client's per-request
+  tokens; clock in/out POSTs are guarded by a separate action-busy flag and
+  notify only while the extension is still enabled.
 
 **Phase 6 — Error/empty states & polish**
 

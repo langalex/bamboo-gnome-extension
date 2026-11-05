@@ -92,8 +92,14 @@ export class Session {
   async send_and_read_async(
     msg: Message,
     _priority: number,
-    _cancellable: unknown,
+    cancellable?: { is_cancelled(): boolean },
   ): Promise<{ toArray(): Uint8Array }> {
+    // Yield once so tests can cancel a request while it is in flight, then
+    // fail it like libsoup does when the cancellable is triggered.
+    await Promise.resolve();
+    if (cancellable?.is_cancelled()) {
+      throw new Error("Cancelled");
+    }
     const { status, body } = responder(msg);
     msg.setStatus(status);
     return { toArray: () => new TextEncoder().encode(body) };

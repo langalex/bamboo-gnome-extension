@@ -64,8 +64,8 @@ export class BambooClient {
   }
 
   /** GET /api/v1/employees/0 — resolves to the API key's owner. */
-  async getSelf(): Promise<EmployeeRecord> {
-    return this.#requestJson("GET", "/employees/0");
+  async getSelf(cancellable?: Gio.Cancellable): Promise<EmployeeRecord> {
+    return this.#requestJson("GET", "/employees/0", undefined, cancellable);
   }
 
   /**
@@ -76,6 +76,7 @@ export class BambooClient {
     employeeId: number,
     from: Date,
     to: Date,
+    cancellable?: Gio.Cancellable,
   ): Promise<ClockEntriesResponse> {
     const filter =
       `employeeId eq ${employeeId} and ` +
@@ -84,17 +85,38 @@ export class BambooClient {
       `filter=${encodeURIComponent(filter)}` +
       `&sort=${encodeURIComponent("start desc")}` +
       `&pageSize=200`;
-    return this.#requestJson("GET", `/time-tracking/clock-entries?${qs}`);
+    return this.#requestJson(
+      "GET",
+      `/time-tracking/clock-entries?${qs}`,
+      undefined,
+      cancellable,
+    );
   }
 
   /** POST /api/v1/time-tracking/clock-ins — returns the new open entry. */
-  async clockIn(req: ClockInRequest): Promise<ClockEntry> {
-    return this.#requestJson("POST", "/time-tracking/clock-ins", req);
+  async clockIn(
+    req: ClockInRequest,
+    cancellable?: Gio.Cancellable,
+  ): Promise<ClockEntry> {
+    return this.#requestJson(
+      "POST",
+      "/time-tracking/clock-ins",
+      req,
+      cancellable,
+    );
   }
 
   /** POST /api/v1/time-tracking/clock-outs — returns the closed entry. */
-  async clockOut(req: ClockOutRequest): Promise<ClockEntry> {
-    return this.#requestJson("POST", "/time-tracking/clock-outs", req);
+  async clockOut(
+    req: ClockOutRequest,
+    cancellable?: Gio.Cancellable,
+  ): Promise<ClockEntry> {
+    return this.#requestJson(
+      "POST",
+      "/time-tracking/clock-outs",
+      req,
+      cancellable,
+    );
   }
 
   /** Abort all in-flight requests; called when the extension is disabled. */
@@ -106,6 +128,7 @@ export class BambooClient {
     method: string,
     path: string,
     body?: unknown,
+    parent?: Gio.Cancellable,
   ): Promise<T> {
     const msg = Soup.Message.new(method, `${this.#baseUrl}${path}`);
     msg.get_request_headers().append("Authorization", this.#authHeader);
@@ -120,6 +143,16 @@ export class BambooClient {
     }
 
     const cancellable = new Gio.Cancellable();
+    // Chain the caller's token (a superseding request or disable()) into this
+    // request's cancellable, which also carries the timeout below.
+    let parentId = 0;
+    if (parent) {
+      if (parent.is_cancelled()) {
+        cancellable.cancel();
+      } else {
+        parentId = parent.connect("cancelled", () => cancellable.cancel());
+      }
+    }
     let timedOut = false;
     const timer = GLib.timeout_add(
       GLib.PRIORITY_DEFAULT,
@@ -154,6 +187,7 @@ export class BambooClient {
         0,
       );
     } finally {
+      if (parentId) parent?.disconnect(parentId);
       GLib.source_remove(timer);
     }
 
