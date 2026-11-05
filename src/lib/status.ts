@@ -77,6 +77,11 @@ export function formatDuration(ms: number): string {
   return `${hours}h ${minutes}m`;
 }
 
+/** Format a duration expressed in hours (the entry `hours` field) as "2h 25m". */
+export function formatHours(hours: number): string {
+  return formatDuration(hours * HOUR_MS);
+}
+
 /** Format a Date as "HH:MM" in the local timezone. */
 export function formatTime(date: Date): string {
   const h = String(date.getHours()).padStart(2, "0");

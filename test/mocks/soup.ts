@@ -86,6 +86,9 @@ export class Message {
 }
 
 export class Session {
+  /** Mirrors Soup.Session.abort; a no-op under the test stub. */
+  abort(): void {}
+
   async send_and_read_async(
     msg: Message,
     _priority: number,

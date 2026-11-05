@@ -135,12 +135,29 @@ bamboo_gnome_extension/
 - Unit-tested under GJS (`gjs test-status.js`, 20 assertions incl. timezone
   midnight boundary + overnight-open-entry cases).
 
-**Phase 4 — Panel indicator & popup** (`src/extension.ts`)
+**Phase 4 — Panel indicator & popup ✅** (`src/extension.ts`)
 
-- `Main.panel.addToStatusArea()`; label updates every minute with status + total.
-- `PopupMenu`: status header, today's entries (custom rows: `start–end` |
-  duration, "live" for open entry), total row, Clock In/Out button, Refresh,
-  "Open BambooHR" item.
+- `PanelMenu.Button` indicator added via `Main.panel.addToStatusArea()`; label
+  `● Clocked in · 4h 12m` / `○ Not clocked in` (green when clocked in, gray
+  otherwise, red on error with no data), re-rendered every 60s — a GLib timer
+  that re-renders live durations locally and refreshes from the API (Phase 5
+  switches this to the settings-driven 60s-in / 300s-out intervals).
+- `PopupMenu`: status header (`Clocked in since HH:MM` / not clocked in /
+  `Refreshing…` / error), today's entries (non-reactive rows `start–end` |
+  duration, the open entry rendered as a green `HH:MM – (live)` row),
+  "No entries today" empty row, `Total today` row, Clock In/Out item (POSTs
+  `/time-tracking/clock-ins` / `/time-tracking/clock-outs` with the local IANA
+  timezone), Refresh, and "Open BambooHR" (default browser via `Gio.AppInfo`).
+- Fetch uses the 48h window + per-entry-timezone summarization from
+  `status.ts`; employee id auto-resolves via `GET /employees/0` and is cached.
+- Cleanup in `disable()`: timer removed, indicator destroyed (panel entry +
+  menu + item signals), Soup session aborted via the new `BambooClient.abort()`
+  (cancelled requests surface as "Request cancelled", distinct from timeouts).
+- GObject/GJS classes here use the `_init()` + `declare`-only fields pattern:
+  GJS dispatches `_init` before subclass field initializers run, so fields with
+  initializers would clobber values assigned in `_init`.
+
+**Phase 5 — Refresh & lifecycle**
 
 **Phase 5 — Refresh & lifecycle**
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ClockEntry } from "../src/lib/types.js";
 import {
   formatDuration,
+  formatHours,
   formatTime,
   formatTimeSeconds,
   isToday,
@@ -74,10 +75,25 @@ describe("summarizeToday", () => {
   const now = new Date("2026-03-17T16:00:00-06:00");
 
   it("summarizes a typical day with an open entry", () => {
-    const closedAm = entry(1, "2026-03-17T09:00:00-06:00", "2026-03-17T11:30:00-06:00", { hours: 2.5 });
-    const closedPm = entry(2, "2026-03-17T13:00:00-06:00", "2026-03-17T15:00:00-06:00", { hours: 2.0 });
+    const closedAm = entry(
+      1,
+      "2026-03-17T09:00:00-06:00",
+      "2026-03-17T11:30:00-06:00",
+      { hours: 2.5 },
+    );
+    const closedPm = entry(
+      2,
+      "2026-03-17T13:00:00-06:00",
+      "2026-03-17T15:00:00-06:00",
+      { hours: 2.0 },
+    );
     const openNow = entry(3, "2026-03-17T15:05:00-06:00", null);
-    const yesterday = entry(4, "2026-03-16T09:00:00-06:00", "2026-03-16T17:00:00-06:00", { hours: 8 });
+    const yesterday = entry(
+      4,
+      "2026-03-16T09:00:00-06:00",
+      "2026-03-16T17:00:00-06:00",
+      { hours: 8 },
+    );
 
     const s = summarizeToday([closedPm, openNow, yesterday, closedAm], now);
 
@@ -92,8 +108,18 @@ describe("summarizeToday", () => {
   });
 
   it("sorts today's entries by start time regardless of input order", () => {
-    const later = entry(2, "2026-03-17T13:00:00-06:00", "2026-03-17T15:00:00-06:00", { hours: 2 });
-    const earlier = entry(1, "2026-03-17T09:00:00-06:00", "2026-03-17T11:30:00-06:00", { hours: 2.5 });
+    const later = entry(
+      2,
+      "2026-03-17T13:00:00-06:00",
+      "2026-03-17T15:00:00-06:00",
+      { hours: 2 },
+    );
+    const earlier = entry(
+      1,
+      "2026-03-17T09:00:00-06:00",
+      "2026-03-17T11:30:00-06:00",
+      { hours: 2.5 },
+    );
 
     const s = summarizeToday([later, earlier], now);
 
@@ -111,7 +137,12 @@ describe("summarizeToday", () => {
   });
 
   it("returns zeros when nothing happened today", () => {
-    const yesterday = entry(4, "2026-03-16T09:00:00-06:00", "2026-03-16T17:00:00-06:00", { hours: 8 });
+    const yesterday = entry(
+      4,
+      "2026-03-16T09:00:00-06:00",
+      "2026-03-16T17:00:00-06:00",
+      { hours: 8 },
+    );
 
     const s = summarizeToday([yesterday], now);
 
@@ -125,7 +156,12 @@ describe("summarizeToday", () => {
   it("counts an overnight open entry toward today's total", () => {
     // Open since Mar 16 22:00 MDT → 18h elapsed by now (Mar 17 16:00).
     const openYesterday = entry(5, "2026-03-16T22:00:00-06:00", null);
-    const closedAm = entry(1, "2026-03-17T09:00:00-06:00", "2026-03-17T11:30:00-06:00", { hours: 2.5 });
+    const closedAm = entry(
+      1,
+      "2026-03-17T09:00:00-06:00",
+      "2026-03-17T11:30:00-06:00",
+      { hours: 2.5 },
+    );
 
     const s = summarizeToday([openYesterday, closedAm], now);
 
@@ -135,7 +171,12 @@ describe("summarizeToday", () => {
   });
 
   it("ignores live time from an open entry that starts in the future", () => {
-    const closedAm = entry(1, "2026-03-17T09:00:00-06:00", "2026-03-17T11:30:00-06:00", { hours: 2.5 });
+    const closedAm = entry(
+      1,
+      "2026-03-17T09:00:00-06:00",
+      "2026-03-17T11:30:00-06:00",
+      { hours: 2.5 },
+    );
     const futureOpen = entry(6, "2026-03-17T17:00:00-06:00", null);
 
     const s = summarizeToday([closedAm, futureOpen], now);
@@ -148,11 +189,16 @@ describe("summarizeToday", () => {
     // 2026-03-17 15:30 UTC is 2026-03-18 00:30 in Tokyo, so an entry dated
     // Mar 18 in Asia/Tokyo belongs in "today" even though the host is on Mar 17.
     const tokyoNow = new Date("2026-03-17T15:30:00Z");
-    const tokyoEntry = entry(7, "2026-03-18T00:30:00+09:00", "2026-03-18T01:30:00+09:00", {
-      date: "2026-03-18",
-      timezone: "Asia/Tokyo",
-      hours: 1,
-    });
+    const tokyoEntry = entry(
+      7,
+      "2026-03-18T00:30:00+09:00",
+      "2026-03-18T01:30:00+09:00",
+      {
+        date: "2026-03-18",
+        timezone: "Asia/Tokyo",
+        hours: 1,
+      },
+    );
 
     const s = summarizeToday([tokyoEntry], tokyoNow);
 
@@ -187,6 +233,18 @@ describe("formatDuration", () => {
   });
 });
 
+describe("formatHours", () => {
+  it.each([
+    [0, "0m"],
+    [0.75, "45m"],
+    [1, "1h"],
+    [2.4666666667, "2h 28m"],
+    [8, "8h"],
+  ])("formats %p hours as %p", (hours, expected) => {
+    expect(formatHours(hours)).toBe(expected);
+  });
+});
+
 describe("formatTime", () => {
   it("formats as zero-padded HH:MM", () => {
     // Tests run with TZ=UTC (see vitest.config.ts).
@@ -197,7 +255,11 @@ describe("formatTime", () => {
 
 describe("formatTimeSeconds", () => {
   it("appends zero-padded seconds to HH:MM", () => {
-    expect(formatTimeSeconds(new Date("2026-03-17T09:05:07Z"))).toBe("09:05:07");
-    expect(formatTimeSeconds(new Date("2026-03-17T09:05:00Z"))).toBe("09:05:00");
+    expect(formatTimeSeconds(new Date("2026-03-17T09:05:07Z"))).toBe(
+      "09:05:07",
+    );
+    expect(formatTimeSeconds(new Date("2026-03-17T09:05:00Z"))).toBe(
+      "09:05:00",
+    );
   });
 });

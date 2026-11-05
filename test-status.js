@@ -23,7 +23,7 @@ function loadBundle() {
 
   const fn = new Function(
     code +
-      "\n;return { summarizeToday, isToday, formatDuration, formatTime, formatTimeSeconds };",
+      "\n;return { summarizeToday, isToday, formatDuration, formatHours, formatTime, formatTimeSeconds };",
   );
   return fn();
 }
@@ -32,6 +32,7 @@ const {
   summarizeToday,
   isToday,
   formatDuration,
+  formatHours,
   formatTime,
   formatTimeSeconds,
 } = loadBundle();
@@ -177,6 +178,9 @@ check("formatDuration 45m", formatDuration(45 * 60000), "45m");
 check("formatDuration 3h", formatDuration(3 * 3600000), "3h");
 check("formatDuration 0", formatDuration(0), "0m");
 check("formatDuration negative", formatDuration(-5000), "0m");
+check("formatHours 2h28m", formatHours(2.4666666667), "2h 28m");
+check("formatHours 1.5h", formatHours(1.5), "1h 30m");
+check("formatHours 0", formatHours(0), "0m");
 // formatTime renders in the process-local timezone; compare against that.
 const localTime = new Date("2026-03-17T09:05:00-06:00");
 const localExpected = `${String(localTime.getHours()).padStart(2, "0")}:${String(localTime.getMinutes()).padStart(2, "0")}`;

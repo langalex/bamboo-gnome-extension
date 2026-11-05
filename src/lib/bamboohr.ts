@@ -97,6 +97,11 @@ export class BambooClient {
     return this.#requestJson("POST", "/time-tracking/clock-outs", req);
   }
 
+  /** Abort all in-flight requests; called when the extension is disabled. */
+  abort(): void {
+    this.#session.abort();
+  }
+
   async #requestJson<T>(
     method: string,
     path: string,
@@ -115,10 +120,12 @@ export class BambooClient {
     }
 
     const cancellable = new Gio.Cancellable();
+    let timedOut = false;
     const timer = GLib.timeout_add(
       GLib.PRIORITY_DEFAULT,
       this.#timeoutMs,
       () => {
+        timedOut = true;
         cancellable.cancel();
         return GLib.SOURCE_REMOVE;
       },
@@ -132,11 +139,15 @@ export class BambooClient {
         cancellable,
       );
     } catch (err) {
-      if (cancellable.is_cancelled()) {
+      if (timedOut) {
         throw new BambooApiError(
           `Request timed out after ${this.#timeoutMs / 1000}s`,
           0,
         );
+      }
+      if (cancellable.is_cancelled()) {
+        // Cancelled from outside (e.g. session aborted on disable).
+        throw new BambooApiError("Request cancelled", 0);
       }
       throw new BambooApiError(
         `Network error: ${err instanceof Error ? err.message : String(err)}`,
