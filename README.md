@@ -6,15 +6,30 @@ day's total, and a **Clock In / Clock Out** button.
 
 Built with **TypeScript** (bundled to GJS ESM via esbuild) for **GNOME Shell 51**.
 
-> **Status:** Phases 1–3 done (scaffold, settings, API client, status logic with
-> GJS unit tests). Phase 4 (panel indicator + popup) is next.
+> **Status:** Phases 1–6 done (scaffold & settings, API client, status logic,
+> panel indicator + popup, refresh & lifecycle, error/empty states & polish).
 
 ## Requirements
 
 - GNOME Shell 51 (GNOME 51)
 - Node.js ≥ 18 + npm (dev-time only)
-- A BambooHR **API key** (avatar menu bottom-left → **API Keys**) with
-  permission to view/edit your timesheet
+- A BambooHR **API key** with permission to view/edit your timesheet
+- Company Time Tracking with clock in/out enabled (timesheet type `CLOCK`)
+
+## Setup
+
+1. **Get an API key:** in BambooHR, click your avatar / user menu in the
+   bottom-left corner → **API Keys** → **Generate New Key**. The key is shown
+   once — copy it now.
+2. **Find your company domain:** it's the subdomain of your BambooHR URL,
+   e.g. `https://mycompany.bamboohr.com/` → domain `mycompany`.
+3. **Build & install** (see below), then open the preferences via the
+   Extensions app (gear icon next to BambooHR Timesheet) or
+   `gnome-extensions prefs bamboo-timesheet@user`, and enter the domain + key.
+
+Until configured, the panel shows **"Click to configure"** — its popup has a
+**Configure…** item that opens the preferences; the indicator starts tracking
+on its own as soon as domain and key are saved.
 
 ## Build & install
 
@@ -32,6 +47,32 @@ gnome-extensions enable bamboo-timesheet@user
 Reload the shell after installing: `Alt+F2` → `r` (X11), or log out/in
 (Wayland).
 
+## What the indicator shows
+
+| Panel label                     | Meaning                                           |
+| ------------------------------- | ------------------------------------------------- |
+| `● Clocked in · 4h 12m` (green) | Open clock entry; total ticks with the live entry |
+| `○ Not clocked in` (gray)       | No open entry                                     |
+| `Click to configure` (amber)    | No company domain / API key set yet               |
+| `○ Error` (red)                 | Last fetch failed and there is no data to show    |
+| `○ BambooHR` (placeholder)      | Enabled and configured, first fetch still running |
+
+The popup lists today's entries (`start – end` and duration, the open entry as
+a green live row), shows **Total today**, and offers Clock In/Out, Refresh and
+Open BambooHR. A day without entries shows a dim **"No entries today"** row.
+
+## Error handling
+
+- **Network errors / timeouts** stay visible as a `⚠ …` row in the popup (and
+  the header when no data is shown); the refresh timer keeps retrying.
+- **401/403** (bad key / disabled key / missing permission) pause automatic
+  refresh — BambooHR temporarily disables API access after repeated bad keys.
+  A hint row says so; after fixing the key in the preferences, press
+  **Refresh** (or open the popup) to retry and resume the timer.
+- **409 conflicts** (e.g. "already clocked in") surface the server's message
+  via a notification, and the following refresh reconciles the shown state.
+- Clock in/out failures always end in a notification; refreshes never pop one.
+
 ## Development
 
 ```sh
@@ -42,8 +83,6 @@ npm run watch        # rebuild bundles on change
 Settings are edited via the GNOME Extensions app (gear icon) or
 `gnome-extensions prefs bamboo-timesheet@user`.
 
-## Configuration
-
 | Setting        | Meaning                                             |
 | -------------- | --------------------------------------------------- |
 | Company domain | Subdomain before `.bamboohr.com` (e.g. `mycompany`) |
@@ -51,11 +90,28 @@ Settings are edited via the GNOME Extensions app (gear icon) or
 | Employee ID    | `0` = auto-detect via the API key's owner           |
 | Refresh in/out | Seconds between refreshes while clocked in / out    |
 
+The API key is stored as plain text in GSettings (user-entered in the
+preferences); it is never hardcoded or logged.
+
 ## Troubleshooting
 
 ```sh
 journalctl -f /usr/bin/gnome-shell      # shell errors
 GJS_DEBUG_OUTPUT=all gnome-shell --replace  # verbose GJS logging (X11)
 ```
+
+Sanity-check the key and permissions with curl before debugging the extension:
+
+```sh
+curl -u "{API_KEY}:x" "https://{domain}.bamboohr.com/api/v1/employees/0"
+```
+
+- `Unauthorized: check your API key` → re-generate the key; note the automatic
+  refresh is paused until a manual Refresh succeeds.
+- `Forbidden: the API key is disabled or lacks permission` → the key may have
+  been disabled by repeated failures (wait ~10 min) or timesheet permissions
+  are missing.
+- Clock in/out returns 409/422 → confirm Time Tracking with clock in/out is
+  enabled for your company.
 
 See `PLAN.md` for the full plan and API details.

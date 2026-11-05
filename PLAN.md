@@ -171,11 +171,23 @@ bamboo_gnome_extension/
   tokens; clock in/out POSTs are guarded by a separate action-busy flag and
   notify only while the extension is still enabled.
 
-**Phase 6 — Error/empty states & polish**
+**Phase 6 — Error/empty states & polish ✅**
 
-- Not configured ("Click to configure"), network error, 401/403 (bad
-  key/permissions), 409 conflict, "No entries today" empty state; stylesheet;
-  README with setup steps (get API key from BambooHR user menu → API Keys).
+- Not configured: the panel shows an amber `Click to configure` indicator whose
+  popup offers a `Configure…` item (opens the preferences via
+  `Extension.openPreferences()`); a GSettings `changed` listener starts the
+  extension automatically once domain + key are saved — no re-enable needed.
+- Errors: with stale data on display the popup shows a `⚠ …` row for the last
+  failure (red); with no data the header carries the error and the panel label
+  turns red `○ Error`.
+- 401/403 pause the automatic refresh timer (BambooHR disables API access after
+  repeated bad keys) with a `Auto-refresh paused …` hint row; a manual Refresh
+  (or popup open) retries and re-arms the timer on success.
+- 409 conflicts surface the server's message via notification; the follow-up
+  refresh reconciles the UI state. `No entries today` dim empty row retained.
+- Stylesheet states (`bamboo-unconfigured`, `bamboo-popup-error`,
+  `bamboo-popup-hint`) and a README with setup steps (API key from the BambooHR
+  user menu → API Keys), state table and troubleshooting.
 
 ## 6. Validation plan
 

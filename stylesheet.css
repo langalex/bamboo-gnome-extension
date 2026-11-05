@@ -23,9 +23,14 @@
   color: #e01b24;
 }
 
+/* Unconfigured first-run state: attention, not an error */
+.bamboo-indicator.bamboo-unconfigured .bamboo-status-label {
+  color: #f5c211;
+}
+
 /* Popup entries */
 .bamboo-entry-time {
-  font-feature-settings: 'tnum';
+  font-feature-settings: "tnum";
 }
 
 .bamboo-entry-live {
@@ -34,4 +39,14 @@
 
 .bamboo-popup-total {
   font-weight: 700;
+}
+
+/* Popup row reporting the last refresh failure while stale data is shown */
+.bamboo-popup-error {
+  color: #e01b24;
+}
+
+/* Popup row explaining that the refresh timer is paused after a 401/403 */
+.bamboo-popup-hint {
+  color: #c0bfbc;
 }

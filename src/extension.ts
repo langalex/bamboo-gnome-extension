@@ -12,8 +12,13 @@ import {
   PopupMenuItem,
   PopupSeparatorMenuItem,
 } from "@girs/gnome-shell/ui/popupMenu";
-import { BambooClient } from "./lib/bamboohr.js";
-import { getSettings, loadSettings, SettingsKeys } from "./lib/settings.js";
+import { BambooApiError, BambooClient } from "./lib/bamboohr.js";
+import {
+  getSettings,
+  loadSettings,
+  SettingsKeys,
+  type BambooSettings,
+} from "./lib/settings.js";
 import {
   formatDuration,
   formatHours,
@@ -36,6 +41,13 @@ const MIN_REFRESH_INTERVAL_SECONDS = 5;
 /** Maximum characters of an error message shown in the popup header. */
 const MAX_ERROR_LENGTH = 90;
 
+/**
+ * HTTP statuses that mean "the key is wrong or not permitted". BambooHR
+ * temporarily disables API access after repeated bad keys, so these stop the
+ * refresh timer instead of being retried at the settings-driven cadence.
+ */
+const AUTH_ERROR_STATUSES = [401, 403];
+
 /** Callbacks the indicator invokes on user interaction. */
 interface IndicatorActions {
   /** Re-fetch data from the API. */
@@ -44,6 +56,16 @@ interface IndicatorActions {
   toggleClock(): void;
   /** Open the BambooHR web app in the default browser. */
   openBamboo(): void;
+  /** Open the extension's preferences dialog. */
+  openPrefs(): void;
+}
+
+/** Extra render state for the indicator beyond a summary + error. */
+interface UiState {
+  /** Passive first-run mode: popup offers to open the preferences. */
+  unconfigured?: boolean;
+  /** Auto-refresh is paused after a 401/403; a manual Refresh re-arms it. */
+  authPaused?: boolean;
 }
 
 /** Collapse whitespace and clip an error message for the popup header. */
@@ -133,29 +155,57 @@ const BambooIndicator = GObject.registerClass(
       this._actions = actions;
     }
 
-    /** Re-render the panel label and the whole popup from a summary. */
-    update(summary: TodaySummary | null, error: string | null): void {
-      this._render(summary, error);
+    /**
+     * Passive first-run state: the panel asks to be configured and the popup
+     * offers to open the preferences. No API client or refresh timer backing.
+     */
+    showUnconfigured(): void {
+      this._render(null, null, { unconfigured: true });
     }
 
-    _render(summary: TodaySummary | null, error: string | null): void {
-      // Panel label: "● Clocked in · 4h 12m" or "○ Not clocked in"; the bare
-      // placeholder shows before the first fetch (or while erroring with no
-      // data). The error/absent data distinction is Phase 6 polish.
-      if (summary?.clockedIn) {
+    /** Re-render the panel label and the whole popup from a summary. */
+    update(
+      summary: TodaySummary | null,
+      error: string | null,
+      state: UiState = {},
+    ): void {
+      this._render(summary, error, state);
+    }
+
+    _render(
+      summary: TodaySummary | null,
+      error: string | null,
+      state: UiState = {},
+    ): void {
+      const { unconfigured = false, authPaused = false } = state;
+      // Panel label: "● Clocked in · 4h 12m" / "○ Not clocked in" / the bare
+      // placeholder before the first fetch / red "○ Error" while erroring
+      // with no data / amber "Click to configure" until domain + key are set.
+      if (unconfigured) {
+        this._label.set_text("Click to configure");
+      } else if (summary?.clockedIn) {
         this._label.set_text(
           `● Clocked in · ${formatDuration(summary.totalMs)}`,
         );
       } else if (summary) {
         this._label.set_text("○ Not clocked in");
+      } else if (error) {
+        this._label.set_text("○ Error");
       } else {
         this._label.set_text("○ BambooHR");
       }
 
-      for (const cls of ["clocked-in", "clocked-out", "bamboo-error"]) {
+      for (const cls of [
+        "clocked-in",
+        "clocked-out",
+        "bamboo-error",
+        "bamboo-unconfigured",
+      ]) {
         this.remove_style_class_name(cls);
       }
-      if (error && !summary) {
+      if (unconfigured) {
+        this.add_style_class_name("bamboo-unconfigured");
+      } else if (error && !summary) {
         this.add_style_class_name("bamboo-error");
       } else if (summary?.clockedIn) {
         this.add_style_class_name("clocked-in");
@@ -163,12 +213,37 @@ const BambooIndicator = GObject.registerClass(
         this.add_style_class_name("clocked-out");
       }
 
-      this._rebuildMenu(summary, error);
+      this._rebuildMenu(summary, error, { unconfigured, authPaused });
     }
 
-    _rebuildMenu(summary: TodaySummary | null, error: string | null): void {
+    _rebuildMenu(
+      summary: TodaySummary | null,
+      error: string | null,
+      state: UiState,
+    ): void {
       const menu = this._menu;
       menu.removeAll();
+
+      if (state.unconfigured) {
+        menu.addMenuItem(
+          new PopupMenuItem("Not configured", {
+            reactive: false,
+            can_focus: false,
+          }),
+        );
+        menu.addMenuItem(new PopupSeparatorMenuItem());
+        const hint = new PopupMenuItem(
+          "Set your BambooHR company domain and API key",
+          { reactive: false, can_focus: false },
+        );
+        hint.label.add_style_class_name("dim-label");
+        menu.addMenuItem(hint);
+        menu.addMenuItem(new PopupSeparatorMenuItem());
+        const configure = new PopupMenuItem("Configure…");
+        configure.connect("activate", () => this._actions?.openPrefs());
+        menu.addMenuItem(configure);
+        return;
+      }
 
       // Status header.
       let header: string;
@@ -188,6 +263,25 @@ const BambooIndicator = GObject.registerClass(
         new PopupMenuItem(header, { reactive: false, can_focus: false }),
       );
       menu.addMenuItem(new PopupSeparatorMenuItem());
+
+      // Surface the last failure even when stale data is still on display;
+      // with no data the header itself already carries the error.
+      if (error && summary) {
+        const errRow = new PopupMenuItem(
+          `⚠ ${truncate(error, MAX_ERROR_LENGTH)}`,
+          { reactive: false, can_focus: false },
+        );
+        errRow.label.add_style_class_name("bamboo-popup-error");
+        menu.addMenuItem(errRow);
+      }
+      if (state.authPaused) {
+        const hint = new PopupMenuItem(
+          "Auto-refresh paused — fix the API key, then Refresh",
+          { reactive: false, can_focus: false },
+        );
+        hint.label.add_style_class_name("bamboo-popup-hint");
+        menu.addMenuItem(hint);
+      }
 
       if (summary) {
         const now = new Date();
@@ -255,20 +349,64 @@ export default class BambooTimesheetExtension extends Extension {
   #refreshCancellable: Gio.Cancellable | null = null;
   #tickSource = 0;
   #menuOpenId = 0;
+  // GSettings `changed` id while in the unconfigured first-run state; lets the
+  // extension start on its own once a domain + key are saved in the prefs.
+  #settingsChangedId = 0;
+  // Set on a 401/403: the refresh timer is paused (BambooHR disables API
+  // access after repeated bad keys); a manual Refresh can still retry.
+  #authFailed = false;
 
   override enable(): void {
     const settings = loadSettings();
     const cfg = getSettings(settings);
+    this.#settings = settings;
 
-    // Phase 6 adds a "Click to configure" indicator state.
+    // Phase 6: with no domain/key set, keep a passive indicator that offers to
+    // open the preferences and starts by itself once they are filled in.
     if (!cfg.configured) {
       console.log(
         "[bamboo-timesheet] not configured: set company domain and API key in preferences",
       );
+      this.#enterUnconfiguredMode(settings, cfg.companyDomain);
       return;
     }
+    this.#startConfigured(cfg);
+  }
 
-    this.#settings = settings;
+  /** Passive first-run mode: indicator only, no client or timers. */
+  #enterUnconfiguredMode(settings: Gio.Settings, companyDomain: string): void {
+    this.#companyDomain = companyDomain;
+
+    this.#indicator = new BambooIndicator();
+    this.#indicator.setActions({
+      refresh: () => {},
+      toggleClock: () => {},
+      openBamboo: () => this.#openBamboo(),
+      openPrefs: () => this.openPreferences(),
+    });
+    this.#indicator.showUnconfigured();
+    Main.panel.addToStatusArea(PANEL_ROLE, this.#indicator);
+
+    // Start automatically once the prefs window saves a domain + key — no
+    // enable/disable round-trip needed. Both keys may arrive in one `changed`
+    // burst, so only the first configured emission transitions.
+    this.#settingsChangedId = settings.connect("changed", () => {
+      if (this.#settingsChangedId === 0) return;
+      const cfg = getSettings(settings);
+      if (!cfg.configured) return;
+      settings.disconnect(this.#settingsChangedId);
+      this.#settingsChangedId = 0;
+      this.#indicator?.destroy();
+      this.#indicator = null;
+      this.#startConfigured(cfg);
+    });
+  }
+
+  /** Full data mode: API client, popup actions, initial refresh + timer. */
+  #startConfigured(cfg: BambooSettings): void {
+    const settings = this.#settings;
+    if (!settings) return;
+
     this.#companyDomain = cfg.companyDomain;
     this.#employeeId = cfg.employeeId;
     this.#client = new BambooClient({
@@ -280,6 +418,7 @@ export default class BambooTimesheetExtension extends Extension {
     this.#fetched = false;
     this.#actionBusy = false;
     this.#clockedIn = false;
+    this.#authFailed = false;
     this.#refreshCancellable = null;
 
     this.#indicator = new BambooIndicator();
@@ -287,6 +426,7 @@ export default class BambooTimesheetExtension extends Extension {
       refresh: () => void this.#refresh(),
       toggleClock: () => void this.#toggleClock(),
       openBamboo: () => this.#openBamboo(),
+      openPrefs: () => this.openPreferences(),
     });
     Main.panel.addToStatusArea(PANEL_ROLE, this.#indicator);
 
@@ -305,6 +445,10 @@ export default class BambooTimesheetExtension extends Extension {
   }
 
   override disable(): void {
+    if (this.#settingsChangedId !== 0) {
+      this.#settings?.disconnect(this.#settingsChangedId);
+      this.#settingsChangedId = 0;
+    }
     if (this.#tickSource !== 0) {
       GLib.source_remove(this.#tickSource);
       this.#tickSource = 0;
@@ -330,6 +474,7 @@ export default class BambooTimesheetExtension extends Extension {
     this.#fetched = false;
     this.#actionBusy = false;
     this.#clockedIn = false;
+    this.#authFailed = false;
   }
 
   async #refresh(): Promise<void> {
@@ -362,12 +507,27 @@ export default class BambooTimesheetExtension extends Extension {
       this.#entries = data;
       this.#lastError = null;
       this.#fetched = true;
+      this.#authFailed = false;
     } catch (err) {
       // Cancelled means superseded by a newer refresh or the extension was
       // disabled — the winner owns the UI, so don't surface the error.
       if (cancellable.is_cancelled()) return;
       this.#lastError = err instanceof Error ? err.message : String(err);
       console.warn(`[bamboo-timesheet] refresh failed: ${this.#lastError}`);
+      // A wrong or unauthorized key must not be hammered: BambooHR disables
+      // API access after repeated bad keys, so pause the refresh timer and
+      // wait for a manual Refresh (e.g. after fixing the key in prefs).
+      if (
+        err instanceof BambooApiError &&
+        AUTH_ERROR_STATUSES.includes(err.status)
+      ) {
+        if (!this.#authFailed) {
+          console.warn(
+            `[bamboo-timesheet] auth failed (HTTP ${err.status}) — automatic refresh paused until a successful refresh`,
+          );
+        }
+        this.#authFailed = true;
+      }
     } finally {
       if (this.#refreshCancellable === cancellable) {
         this.#refreshCancellable = null;
@@ -455,6 +615,9 @@ export default class BambooTimesheetExtension extends Extension {
     const settings = this.#settings;
     // Disabled: don't schedule anything (disable() has cleared the sources).
     if (!settings) return;
+    // Auth failures stop the cadence entirely (BambooHR locks out repeated bad
+    // keys); a manual Refresh re-arms the timer once it succeeds.
+    if (this.#authFailed) return;
     const key = this.#clockedIn
       ? SettingsKeys.RefreshIntervalIn
       : SettingsKeys.RefreshIntervalOut;
@@ -484,6 +647,8 @@ export default class BambooTimesheetExtension extends Extension {
       : null;
     // Feeds #armTimer: clocked in → fast cadence, otherwise slow.
     this.#clockedIn = summary?.clockedIn ?? false;
-    indicator.update(summary, this.#lastError);
+    indicator.update(summary, this.#lastError, {
+      authPaused: this.#authFailed,
+    });
   }
 }
