@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.bamboo-timesheet"
+          path="/org/gnome/shell/extensions/bamboo-timesheet/">
+
+    <key name="company-domain" type="s">
+      <default>''</default>
+      <summary>BambooHR company domain</summary>
+      <description>
+        The subdomain before .bamboohr.com in your company's BambooHR URL.
+        For https://mycompany.bamboohr.com this is "mycompany".
+      </description>
+    </key>
+
+    <key name="api-key" type="s">
+      <default>''</default>
+      <summary>BambooHR API key</summary>
+      <description>
+        Personal API key generated in BambooHR (avatar menu → API Keys).
+        Sent as HTTP Basic auth username; keep this secret.
+      </description>
+    </key>
+
+    <key name="employee-id" type="i">
+      <default>0</default>
+      <summary>Employee ID</summary>
+      <description>
+        Your BambooHR employee ID. 0 means "detect automatically" via
+        GET /api/v1/employees/0, which resolves to the API key's owner.
+      </description>
+    </key>
+
+    <key name="refresh-interval-in" type="i">
+      <default>60</default>
+      <summary>Refresh interval while clocked in (seconds)</summary>
+      <description>How often the status is refreshed while you are clocked in.</description>
+    </key>
+
+    <key name="refresh-interval-out" type="i">
+      <default>300</default>
+      <summary>Refresh interval while clocked out (seconds)</summary>
+      <description>How often the status is refreshed while you are clocked out.</description>
+    </key>
+
+  </schema>
+</schemalist>

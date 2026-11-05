@@ -1,0 +1,37 @@
+/* BambooHR Timesheet - panel indicator styling */
+
+.bamboo-indicator {
+  margin-right: 4px;
+}
+
+.bamboo-status-label {
+  font-weight: 600;
+}
+
+/* Clocked-in state: green dot + subtle green tint on the status text */
+.bamboo-indicator.clocked-in .bamboo-status-label {
+  color: #2ec27e;
+}
+
+/* Clocked-out state */
+.bamboo-indicator.clocked-out .bamboo-status-label {
+  color: #c0bfbc;
+}
+
+/* Errors / not configured */
+.bamboo-indicator.bamboo-error .bamboo-status-label {
+  color: #e01b24;
+}
+
+/* Popup entries */
+.bamboo-entry-time {
+  font-feature-settings: 'tnum';
+}
+
+.bamboo-entry-live {
+  color: #2ec27e;
+}
+
+.bamboo-popup-total {
+  font-weight: 700;
+}

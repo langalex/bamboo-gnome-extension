@@ -1,0 +1,12 @@
+# Dependencies (dev-only; never shipped to the extension dir)
+node_modules/
+
+# Build output staged for install
+dist/
+
+# npm cache redirected here (sandboxed builds)
+.npm-cache/
+
+# Editor / OS noise
+*.log
+.DS_Store

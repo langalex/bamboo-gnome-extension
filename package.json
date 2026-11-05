@@ -1,0 +1,24 @@
+{
+  "name": "bamboo-timesheet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GNOME Shell 51 extension showing BambooHR clock-in status and today's time entries",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc --noEmit",
+    "test": "gjs test-status.js",
+    "watch": "node build.mjs --watch"
+  },
+  "devDependencies": {
+    "@girs/gjs": "^5.6.0",
+    "@girs/glib-2.0": "^5.6.0",
+    "@girs/gio-2.0": "^5.6.0",
+    "@girs/gnome-shell": "^51.0.1",
+    "@girs/gtk-4.0": "^5.6.0",
+    "@girs/adw-1": "^5.6.0",
+    "@girs/soup-3.0": "^5.6.0",
+    "esbuild": "^0.25.0",
+    "typescript": "~5.9.3"
+  }
+}
