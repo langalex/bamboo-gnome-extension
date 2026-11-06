@@ -6,7 +6,7 @@ export const SCHEMA_ID = "org.gnome.shell.extensions.bamboo-timesheet";
 /** Keys bound in prefs.ts. */
 export const SettingsKeys = {
   CompanyDomain: "company-domain",
-  ApiKey: "api-key",
+  ApiKeyVersion: "api-key-version",
   EmployeeId: "employee-id",
   RefreshIntervalIn: "refresh-interval-in",
   RefreshIntervalOut: "refresh-interval-out",
@@ -16,7 +16,8 @@ export type SettingsKey = (typeof SettingsKeys)[keyof typeof SettingsKeys];
 
 export interface BambooSettings {
   companyDomain: string;
-  apiKey: string;
+  /** Non-secret counter; the key itself lives in the keyring (secrets.ts). */
+  apiKeyVersion: number;
   employeeId: number;
   refreshIntervalIn: number;
   refreshIntervalOut: number;
@@ -52,13 +53,13 @@ export function loadSettings(schemasDir?: string | null): Gio.Settings {
 /** Read all settings into a plain object. */
 export function getSettings(s: Gio.Settings): BambooSettings {
   const companyDomain = s.get_string(SettingsKeys.CompanyDomain);
-  const apiKey = s.get_string(SettingsKeys.ApiKey);
+  const apiKeyVersion = s.get_int(SettingsKeys.ApiKeyVersion);
   return {
     companyDomain,
-    apiKey,
+    apiKeyVersion,
     employeeId: s.get_int(SettingsKeys.EmployeeId),
     refreshIntervalIn: s.get_int(SettingsKeys.RefreshIntervalIn),
     refreshIntervalOut: s.get_int(SettingsKeys.RefreshIntervalOut),
-    configured: companyDomain.trim() !== "" && apiKey.trim() !== "",
+    configured: companyDomain.trim() !== "" && apiKeyVersion > 0,
   };
 }

@@ -100,12 +100,13 @@ Settings are edited via the GNOME Extensions app (gear icon) or
 | Setting        | Meaning                                             |
 | -------------- | --------------------------------------------------- |
 | Company domain | Subdomain before `.bamboohr.com` (e.g. `mycompany`) |
-| API key        | Personal key from BambooHR → API Keys               |
+| API key        | Personal key from BambooHR → API Keys (kept in your user keyring) |
 | Employee ID    | `0` = auto-detect via the API key's owner           |
 | Refresh in/out | Seconds between refreshes while clocked in / out    |
 
-The API key is stored as plain text in GSettings (user-entered in the
-preferences); it is never hardcoded or logged.
+The API key is stored in your user keyring (libsecret) — GSettings keeps only
+a non-secret counter marking that a key exists. The key is never hardcoded or
+logged, and it is not shown again in the preferences after saving.
 
 ## Troubleshooting
 
@@ -127,5 +128,6 @@ curl -u "{API_KEY}:x" "https://{domain}.bamboohr.com/api/v1/employees/0"
   are missing.
 - Clock in/out returns 409/422 → confirm Time Tracking with clock in/out is
   enabled for your company.
-
-See `PLAN.md` for the full plan and API details.
+- The key lives in your user keyring; if the item was deleted there (e.g. via
+  Seahorse), the indicator shows `○ Error` — enter the key again in the
+  preferences.

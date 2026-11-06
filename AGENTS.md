@@ -40,7 +40,8 @@ src/
 ├── lib/
 │   ├── bamboohr.ts     # BambooHR API client (Soup 3, Basic auth, typed errors)
 │   ├── status.ts       # PURE logic: summarize entries, totals, formatting (no GI imports)
-│   ├── settings.ts     # Typed GSettings wrapper
+│   ├── settings.ts     # Typed GSettings wrapper (non-secret config + api-key-version)
+│   ├── secrets.ts      # API key storage in the user keyring (libsecret)
 │   └── types.ts        # API request/response shapes
 └── types/gi-ambient.d.ts
 test/
@@ -79,13 +80,15 @@ touching the GNOME Shell or GTK APIs stays in `extension.ts` / `prefs.ts`.
   Don't change this to use the local timezone. Tests pin `TZ=UTC` for
   determinism.
 - **API details** (endpoints, auth, error handling, known 401/403/409/422
-  behaviors) are documented in `PLAN.md` §2 — consult it before touching
-  `src/lib/bamboohr.ts`.
+  behaviors) are documented in the `src/lib/bamboohr.ts` docstrings — consult
+  them before changing the client.
 - **UUID** is `bamboo-timesheet@alex.langs.berlin`; settings schema
   `org.gnome.shell.extensions.bamboo-timesheet`. Keep `metadata.json`,
   `install.sh`, and the schema filename in sync if it ever changes.
-- **Secrets:** the BambooHR API key lives in GSettings (user-entered via
-  prefs). Never hardcode it anywhere, including tests.
+- **Secrets:** the BambooHR API key lives in the user's keyring (stored via
+  `src/lib/secrets.ts`, libsecret). GSettings holds only the non-secret
+  `api-key-version` counter. Never store the key (or any secret) in
+  GSettings/dconf, code, or tests.
 
 ## Testing
 

@@ -13,6 +13,7 @@ import {
   PopupSeparatorMenuItem,
 } from "@girs/gnome-shell/ui/popupMenu";
 import { BambooApiError, BambooClient } from "./lib/bamboohr.js";
+import { lookupApiKey } from "./lib/secrets.js";
 import {
   getSettings,
   loadSettings,
@@ -333,6 +334,12 @@ export default class BambooTimesheetExtension extends Extension {
   #client: BambooClient | null = null;
   #companyDomain = "";
   #employeeId = 0;
+  // Employee id resolved via the API when the settings value is 0; reset on
+  // client rebuilds so a domain/key change re-detects it.
+  #resolvedEmployeeId = 0;
+  // GSettings `api-key-version` the cached client was built against; a
+  // mismatch in #getClient triggers a keyring re-read and a client rebuild.
+  #apiKeyVersion = 0;
   #indicator: InstanceType<typeof BambooIndicator> | null = null;
   #entries: ClockEntry[] = [];
   #lastError: string | null = null;
@@ -410,10 +417,8 @@ export default class BambooTimesheetExtension extends Extension {
 
     this.#companyDomain = cfg.companyDomain;
     this.#employeeId = cfg.employeeId;
-    this.#client = new BambooClient({
-      companyDomain: cfg.companyDomain,
-      apiKey: cfg.apiKey,
-    });
+    // The client is built lazily by #getClient: the API key comes from the
+    // keyring, so its lookup has to await.
     this.#entries = [];
     this.#lastError = null;
     this.#fetched = false;
@@ -470,6 +475,8 @@ export default class BambooTimesheetExtension extends Extension {
     this.#settings = null;
     this.#companyDomain = "";
     this.#employeeId = 0;
+    this.#resolvedEmployeeId = 0;
+    this.#apiKeyVersion = 0;
     this.#entries = [];
     this.#lastError = null;
     this.#fetched = false;
@@ -478,15 +485,55 @@ export default class BambooTimesheetExtension extends Extension {
     this.#authFailed = false;
   }
 
+  /**
+   * The API client for the current settings, (re)building it when the company
+   * domain changed or the keyring key was replaced. Returns null when the
+   * settings no longer name a key; throws when the keyring has no key even
+   * though the settings claim one (e.g. the item was deleted externally).
+   */
+  async #getClient(
+    cancellable?: Gio.Cancellable,
+  ): Promise<BambooClient | null> {
+    const settings = this.#settings;
+    if (!settings) return null;
+    const companyDomain = settings
+      .get_string(SettingsKeys.CompanyDomain)
+      .trim();
+    const apiKeyVersion = settings.get_int(SettingsKeys.ApiKeyVersion);
+    if (!companyDomain || apiKeyVersion <= 0) return null;
+    if (
+      this.#client &&
+      companyDomain === this.#companyDomain &&
+      apiKeyVersion === this.#apiKeyVersion
+    ) {
+      return this.#client;
+    }
+    const apiKey = await lookupApiKey(this.uuid, cancellable ?? null);
+    if (!apiKey) {
+      throw new Error(
+        "API key not found in the keyring — save it again in the preferences",
+      );
+    }
+    if (!this.#settings) return null;
+    this.#client?.abort();
+    this.#client = new BambooClient({ companyDomain, apiKey });
+    this.#companyDomain = companyDomain;
+    this.#apiKeyVersion = apiKeyVersion;
+    this.#employeeId = settings.get_int(SettingsKeys.EmployeeId);
+    this.#resolvedEmployeeId = 0;
+    return this.#client;
+  }
+
   async #refresh(): Promise<void> {
-    const client = this.#client;
-    if (!client) return;
     // Supersede any in-flight refresh: cancel its token so its response can
     // never land after ours and overwrite fresher data with stale state.
     this.#refreshCancellable?.cancel();
     const cancellable = new Gio.Cancellable();
     this.#refreshCancellable = cancellable;
     try {
+      const client = await this.#getClient(cancellable);
+      if (cancellable.is_cancelled()) return;
+      if (!client) return;
       const employeeId = await this.#resolveEmployeeId(client, cancellable);
       const now = new Date();
       // A 48h window so an entry opened yesterday but still running is
@@ -539,13 +586,14 @@ export default class BambooTimesheetExtension extends Extension {
   }
 
   async #toggleClock(): Promise<void> {
-    const client = this.#client;
     // Only guards against concurrent clock-in/out POSTs; a refresh in flight
     // is superseded by the one this action triggers below.
-    if (!client || this.#actionBusy) return;
+    if (this.#actionBusy) return;
     const clockedIn = summarizeToday(this.#entries, new Date()).clockedIn;
     this.#actionBusy = true;
     try {
+      const client = await this.#getClient();
+      if (!client) return;
       const employeeId = await this.#resolveEmployeeId(client);
       if (employeeId <= 0) {
         throw new Error("Could not resolve the BambooHR employee id");
@@ -597,9 +645,10 @@ export default class BambooTimesheetExtension extends Extension {
     cancellable?: Gio.Cancellable,
   ): Promise<number> {
     if (this.#employeeId > 0) return this.#employeeId;
+    if (this.#resolvedEmployeeId > 0) return this.#resolvedEmployeeId;
     const me = await client.getSelf(cancellable);
-    this.#employeeId = Number(me.id) || 0;
-    return this.#employeeId;
+    this.#resolvedEmployeeId = Number(me.id) || 0;
+    return this.#resolvedEmployeeId;
   }
 
   /**

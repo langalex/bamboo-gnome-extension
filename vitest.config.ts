@@ -13,6 +13,7 @@ export default defineConfig({
       { find: /^gi:\/\/GLib$/, replacement: mock("glib") },
       { find: /^gi:\/\/Gio$/, replacement: mock("gio") },
       { find: /^gi:\/\/Soup\?version=3\.0$/, replacement: mock("soup") },
+      { find: /^gi:\/\/Secret$/, replacement: mock("secret") },
     ],
   },
   test: {

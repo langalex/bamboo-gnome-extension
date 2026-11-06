@@ -3,6 +3,7 @@ import Gio from "gi://Gio";
 import Gtk from "gi://Gtk";
 import Pango from "gi://Pango";
 import { ExtensionPreferences } from "@girs/gnome-shell/extensions/prefs";
+import { storeApiKey } from "./lib/secrets.js";
 import { loadSettings, SettingsKeys } from "./lib/settings.js";
 
 function makeSpinRow(
@@ -54,7 +55,7 @@ export default class BambooTimesheetPreferences extends ExtensionPreferences {
         'The domain is only the subdomain, e.g. "mycompany" for ' +
         "https://mycompany.bamboohr.com. Get the API key from BambooHR: " +
         "click your avatar in the bottom-left corner → API Keys. The key " +
-        "is stored as plain text in GSettings.",
+        "is stored in your user keyring, never in plain-text settings.",
     });
     companyPage.add(companyGroup);
     window.add(companyPage);
@@ -85,13 +86,25 @@ export default class BambooTimesheetPreferences extends ExtensionPreferences {
     });
     companyGroup.add(domainRow);
 
-    const apiKeyRow = new Adw.EntryRow({
+    const apiKeyRow = new Adw.PasswordEntryRow({
       title: "API key",
-      text: settings.get_string(SettingsKeys.ApiKey),
     });
+    // The key is never shown again once stored; this suffix keeps the only
+    // visible trace of whether a keyring item exists.
+    const apiKeyState = new Gtk.Label({
+      label:
+        settings.get_int(SettingsKeys.ApiKeyVersion) > 0
+          ? "stored in keyring"
+          : "not set",
+      ellipsize: Pango.EllipsizeMode.END,
+      max_width_chars: 16,
+    });
+    apiKeyState.add_css_class("dim-label");
+    apiKeyState.set_valign(Gtk.Align.CENTER);
+    apiKeyRow.add_suffix(apiKeyState);
     apiKeyRow.set_show_apply_button(true);
     apiKeyRow.connect("apply", () => {
-      settings.set_string(SettingsKeys.ApiKey, apiKeyRow.get_text().trim());
+      void this.#saveApiKey(window, settings, apiKeyRow, apiKeyState);
     });
     companyGroup.add(apiKeyRow);
 
@@ -154,5 +167,40 @@ export default class BambooTimesheetPreferences extends ExtensionPreferences {
     aboutGroup.add(aboutRow);
 
     return Promise.resolve();
+  }
+
+  /**
+   * Store the entered key in the keyring, then bump the GSettings version so
+   * the running extension rebuilds its client without a reload. The entry is
+   * cleared after a successful save so the secret does not linger on screen.
+   */
+  async #saveApiKey(
+    window: Adw.PreferencesWindow,
+    settings: Gio.Settings,
+    row: Adw.PasswordEntryRow,
+    state: Gtk.Label,
+  ): Promise<void> {
+    const apiKey = row.get_text().trim();
+    if (!apiKey) return;
+    try {
+      await storeApiKey(this.uuid, apiKey);
+      settings.set_int(
+        SettingsKeys.ApiKeyVersion,
+        settings.get_int(SettingsKeys.ApiKeyVersion) + 1,
+      );
+      row.set_text("");
+      state.set_text("stored in keyring");
+      window.add_toast(
+        new Adw.Toast({ title: "API key saved to the keyring" }),
+      );
+    } catch (err) {
+      window.add_toast(
+        new Adw.Toast({
+          title: `Saving the API key failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        }),
+      );
+    }
   }
 }

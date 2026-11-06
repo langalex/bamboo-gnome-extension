@@ -24,7 +24,7 @@ describe("getSettings", () => {
     const s = getSettings(
       fakeSettings({
         [SettingsKeys.CompanyDomain]: "acme",
-        [SettingsKeys.ApiKey]: "secret",
+        [SettingsKeys.ApiKeyVersion]: 2,
         [SettingsKeys.EmployeeId]: 12,
         [SettingsKeys.RefreshIntervalIn]: 30,
         [SettingsKeys.RefreshIntervalOut]: 300,
@@ -33,7 +33,7 @@ describe("getSettings", () => {
 
     expect(s).toEqual({
       companyDomain: "acme",
-      apiKey: "secret",
+      apiKeyVersion: 2,
       employeeId: 12,
       refreshIntervalIn: 30,
       refreshIntervalOut: 300,
@@ -42,16 +42,13 @@ describe("getSettings", () => {
   });
 
   it("reports configured=false when the domain is missing", () => {
-    const s = getSettings(fakeSettings({ [SettingsKeys.ApiKey]: "secret" }));
+    const s = getSettings(fakeSettings({ [SettingsKeys.ApiKeyVersion]: 1 }));
     expect(s.configured).toBe(false);
   });
 
-  it("reports configured=false when the API key is blank", () => {
+  it("reports configured=false when no API key is stored", () => {
     const s = getSettings(
-      fakeSettings({
-        [SettingsKeys.CompanyDomain]: "acme",
-        [SettingsKeys.ApiKey]: "   ",
-      }),
+      fakeSettings({ [SettingsKeys.CompanyDomain]: "acme" }),
     );
     expect(s.configured).toBe(false);
   });
@@ -60,7 +57,7 @@ describe("getSettings", () => {
     const s = getSettings(
       fakeSettings({
         [SettingsKeys.CompanyDomain]: " acme ",
-        [SettingsKeys.ApiKey]: " secret ",
+        [SettingsKeys.ApiKeyVersion]: 1,
       }),
     );
     expect(s.configured).toBe(true);

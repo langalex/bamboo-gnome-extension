@@ -12,12 +12,15 @@
       </description>
     </key>
 
-    <key name="api-key" type="s">
-      <default>''</default>
-      <summary>BambooHR API key</summary>
+    <key name="api-key-version" type="i">
+      <default>0</default>
+      <summary>API key version counter</summary>
       <description>
-        Personal API key generated in BambooHR (avatar menu → API Keys).
-        Sent as HTTP Basic auth username; keep this secret.
+        Bumped whenever the API key is created or replaced in the user's
+        keyring; 0 means no key is stored. The key itself lives in the
+        keyring (libsecret) and never in GSettings — this non-secret counter
+        only tells the extension and the preferences when the keyring copy
+        changed.
       </description>
     </key>
 
