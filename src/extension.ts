@@ -304,6 +304,11 @@ const BambooIndicator = GObject.registerClass(
             total: true,
           }),
         );
+        menu.addMenuItem(
+          makeRow("Total this week", formatDuration(summary.weekTotalMs), {
+            total: true,
+          }),
+        );
       }
       menu.addMenuItem(new PopupSeparatorMenuItem());
 
@@ -540,6 +545,11 @@ export default class BambooTimesheetExtension extends Extension {
       // included; "today" is then filtered per entry in the entry's timezone.
       const from = new Date(now);
       from.setDate(from.getDate() - 1);
+      // The week total needs entries back to Monday; one extra day covers
+      // timezone skew between the host and the entry's timezone.
+      const weekFrom = new Date(now);
+      weekFrom.setDate(weekFrom.getDate() - ((weekFrom.getDay() + 6) % 7) - 1);
+      if (weekFrom < from) from.setTime(weekFrom.getTime());
       from.setHours(0, 0, 0, 0);
       const to = new Date(now);
       to.setDate(to.getDate() + 1);

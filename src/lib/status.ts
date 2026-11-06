@@ -12,6 +12,8 @@ export interface TodaySummary {
   openEntry: ClockEntry | null;
   /** Total worked time today in milliseconds (includes live open entry). */
   totalMs: number;
+  /** Total worked time this week (Monday-based, entry's timezone) in milliseconds. */
+  weekTotalMs: number;
 }
 
 const MINUTE_MS = 60_000;
@@ -22,8 +24,8 @@ export function parseIso(iso: string): Date {
   return new Date(iso);
 }
 
-/** True when `dateStr` (an entry's `date`) falls on `now`'s calendar day in `timeZone`. */
-export function isToday(dateStr: string, timeZone: string, now: Date): boolean {
+/** Format the calendar date (YYYY-MM-DD) `now` falls on in `timeZone`. */
+function todayInZone(timeZone: string, now: Date): string {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
@@ -33,7 +35,34 @@ export function isToday(dateStr: string, timeZone: string, now: Date): boolean {
   const parts = Object.fromEntries(
     fmt.formatToParts(now).map((p) => [p.type, p.value]),
   ) as Record<string, string>;
-  return dateStr === `${parts.year}-${parts.month}-${parts.day}`;
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+/** True when `dateStr` (an entry's `date`) falls on `now`'s calendar day in `timeZone`. */
+export function isToday(dateStr: string, timeZone: string, now: Date): boolean {
+  return dateStr === todayInZone(timeZone, now);
+}
+
+/** Return the Monday (YYYY-MM-DD) of the week containing `dateStr` (YYYY-MM-DD). */
+function mondayOf(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const weekday = (date.getUTCDay() + 6) % 7; // 0 = Monday
+  date.setUTCDate(date.getUTCDate() - weekday);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * True when `dateStr` (an entry's `date`) falls in the current week
+ * (Monday through today) in `timeZone`.
+ */
+export function isInCurrentWeek(
+  dateStr: string,
+  timeZone: string,
+  now: Date,
+): boolean {
+  const today = todayInZone(timeZone, now);
+  return dateStr >= mondayOf(today) && dateStr <= today;
 }
 
 /**
@@ -52,10 +81,22 @@ export function summarizeToday(entries: ClockEntry[], now: Date): TodaySummary {
     (a, b) => parseIso(a.start).getTime() - parseIso(b.start).getTime(),
   );
 
+  let weekTotalMs = entries
+    .filter((e) => e.end !== null && isInCurrentWeek(e.date, e.timezone, now))
+    .reduce((sum, e) => sum + e.hours * HOUR_MS, 0);
+
   let totalMs = todays.reduce((sum, e) => sum + e.hours * HOUR_MS, 0);
   if (openEntry) {
     const liveMs = now.getTime() - parseIso(openEntry.start).getTime();
     if (liveMs > 0) totalMs += liveMs;
+    // The open (live) entry only counts toward the week while its date
+    // is still inside the current week.
+    if (
+      liveMs > 0 &&
+      isInCurrentWeek(openEntry.date, openEntry.timezone, now)
+    ) {
+      weekTotalMs += liveMs;
+    }
   }
 
   return {
@@ -64,6 +105,7 @@ export function summarizeToday(entries: ClockEntry[], now: Date): TodaySummary {
     entries: todays,
     openEntry,
     totalMs,
+    weekTotalMs,
   };
 }
 
