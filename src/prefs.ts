@@ -160,9 +160,12 @@ export default class BambooTimesheetPreferences extends ExtensionPreferences {
     aboutPage.add(aboutGroup);
     window.add(aboutPage);
 
+    // The version lives in metadata.json's `version-name` (kept in sync with
+    // package.json per AGENTS.md), so read it from there instead of hardcoding.
+    const version = this.metadata["version-name"] ?? "unknown";
     const aboutRow = new Adw.ActionRow({
       title: "BambooHR Timesheet",
-      subtitle: "v0.1.0 · uses the BambooHR REST API",
+      subtitle: `v${version} · uses the BambooHR REST API`,
     });
     aboutGroup.add(aboutRow);
 
