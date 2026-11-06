@@ -16,15 +16,15 @@ only — there is no CommonJS at runtime).
 
 ## Commands
 
-| Command              | Purpose                                                                                                     |
-| -------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `npm run check`      | Type-check (`tsc --noEmit`) for both main and test tsconfigs — run this after any change                    |
-| `npm test`           | Unit tests (vitest, under Node)                                                                             |
-| `npm run test:watch` | Unit tests in watch mode                                                                                    |
-| `npm run test:gjs`   | GJS smoke test for the compiled status logic (needs `gjs` installed)                                        |
-| `npm run build`      | Bundle `src/` → `dist/` (`extension.js`, `prefs.js`, `status-test.js`)                                      |
-| `npm run package`    | Release bundle (no source maps) + distributable zip → `dist/bamboo-timesheet@alex.langs.berlin.zip`          |
-| `npm run watch`      | Rebuild bundles on change                                                                                   |
+| Command              | Purpose                                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `npm run check`      | Type-check (`tsc --noEmit`) for both main and test tsconfigs — run this after any change                                 |
+| `npm test`           | Unit tests (vitest, under Node)                                                                                          |
+| `npm run test:watch` | Unit tests in watch mode                                                                                                 |
+| `npm run test:gjs`   | GJS smoke test for the compiled status logic (needs `gjs` installed)                                                     |
+| `npm run build`      | Bundle `src/` → `dist/` (`extension.js`, `prefs.js`, `status-test.js`)                                                   |
+| `npm run package`    | Release bundle (no source maps) + distributable zip → `dist/bamboo-timesheet@alex.langs.berlin.zip`                      |
+| `npm run watch`      | Rebuild bundles on change                                                                                                |
 | `./install.sh`       | Build + stage into `~/.local/share/gnome-shell/extensions/bamboo-timesheet@alex.langs.berlin/`, compile GSettings schema |
 
 Typical loop: edit → `npm run check` → `npm test` → `npm run build`.
@@ -89,6 +89,21 @@ touching the GNOME Shell or GTK APIs stays in `extension.ts` / `prefs.ts`.
   `src/lib/secrets.ts`, libsecret). GSettings holds only the non-secret
   `api-key-version` counter. Never store the key (or any secret) in
   GSettings/dconf, code, or tests.
+
+## Versioning and releases
+
+- The version is stored in **two files** and must always stay in sync:
+  - `package.json` → `"version"` (semver string, e.g. `"0.2.0"`)
+  - `metadata.json` → `"version-name"` (same semver string) **and**
+    `"version"` (a monotonically increasing **integer** required by
+    extensions.gnome.org — bump it by 1 on every release; it does _not_
+    match the semver).
+- Every version bump gets a `CHANGELOG.md` entry following its existing
+  [Keep a Changelog](https://keepachangelog.com) format (`Added` /
+  `Changed` / `Fixed` sections, dated release header, compare links at the
+  bottom). Add the entry in the same change as the version bump.
+- Typical release change: update both versions → add changelog entry → run
+  `npm run check` and `npm test`.
 
 ## Testing
 
