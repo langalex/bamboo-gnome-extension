@@ -25,7 +25,7 @@ Built with **TypeScript** (bundled to GJS ESM via esbuild) for **GNOME Shell 51*
    e.g. `https://mycompany.bamboohr.com/` → domain `mycompany`.
 3. **Build & install** (see below), then open the preferences via the
    Extensions app (gear icon next to BambooHR Timesheet) or
-   `gnome-extensions prefs bamboo-timesheet@user`, and enter the domain + key.
+   `gnome-extensions prefs bamboo-timesheet@alex.langs.berlin`, and enter the domain + key.
 
 Until configured, the panel shows **"Click to configure"** — its popup has a
 **Configure…** item that opens the preferences; the indicator starts tracking
@@ -40,12 +40,26 @@ npm test             # unit tests (vitest, runs under Node)
 npm run test:watch   # unit tests in watch mode
 npm run test:gjs     # GJS smoke test for the compiled status logic
 npm run build        # → dist/extension.js, dist/prefs.js, dist/status-test.js
+npm run package      # → dist/bamboo-timesheet@alex.langs.berlin.zip (upload zip)
 ./install.sh         # stages into ~/.local/share/gnome-shell/extensions/
-gnome-extensions enable bamboo-timesheet@user
+gnome-extensions enable bamboo-timesheet@alex.langs.berlin
 ```
 
 Reload the shell after installing: `Alt+F2` → `r` (X11), or log out/in
 (Wayland).
+
+## Packaging for release
+
+`npm run package` rebuilds the bundles **without inline source maps** and zips
+exactly the distributable files, all at the archive root: `metadata.json`,
+`extension.js`, `prefs.js`, `stylesheet.css`, and `schemas/` with both the XML
+source and its compiled schema. Upload the resulting
+`dist/bamboo-timesheet@alex.langs.berlin.zip` to
+[extensions.gnome.org](https://extensions.gnome.org/upload/) or attach it to a
+GitHub release.
+
+Requires `glib-compile-schemas` and `zip`; without `zip` it falls back to
+`python3 -m zipfile` (produces an uncompressed archive).
 
 ## What the indicator shows
 
@@ -81,7 +95,7 @@ npm run watch        # rebuild bundles on change
 ```
 
 Settings are edited via the GNOME Extensions app (gear icon) or
-`gnome-extensions prefs bamboo-timesheet@user`.
+`gnome-extensions prefs bamboo-timesheet@alex.langs.berlin`.
 
 | Setting        | Meaning                                             |
 | -------------- | --------------------------------------------------- |

@@ -23,11 +23,12 @@ only — there is no CommonJS at runtime).
 | `npm run test:watch` | Unit tests in watch mode                                                                                    |
 | `npm run test:gjs`   | GJS smoke test for the compiled status logic (needs `gjs` installed)                                        |
 | `npm run build`      | Bundle `src/` → `dist/` (`extension.js`, `prefs.js`, `status-test.js`)                                      |
+| `npm run package`    | Release bundle (no source maps) + distributable zip → `dist/bamboo-timesheet@alex.langs.berlin.zip`          |
 | `npm run watch`      | Rebuild bundles on change                                                                                   |
-| `./install.sh`       | Build + stage into `~/.local/share/gnome-shell/extensions/bamboo-timesheet@user/`, compile GSettings schema |
+| `./install.sh`       | Build + stage into `~/.local/share/gnome-shell/extensions/bamboo-timesheet@alex.langs.berlin/`, compile GSettings schema |
 
 Typical loop: edit → `npm run check` → `npm test` → `npm run build`.
-`./install.sh` + `gnome-extensions enable bamboo-timesheet@user` to try it in
+`./install.sh` + `gnome-extensions enable bamboo-timesheet@alex.langs.berlin` to try it in
 a real shell (reload with `Alt+F2` → `r` on X11, or log out/in on Wayland).
 
 ## Structure
@@ -49,7 +50,8 @@ test/
 └── status.test.ts
 schemas/                # GSettings schema XML
 build.mjs               # esbuild bundler (also emits the `export const meta` block)
-install.sh, metadata.json, stylesheet.css
+package.mjs             # release zip: dist/<uuid>.zip for extensions.gnome.org / GitHub
+install.sh, LICENSE, metadata.json, stylesheet.css
 ```
 
 Key architectural rule: **`src/lib/status.ts` is pure logic with no GObject /
@@ -79,7 +81,7 @@ touching the GNOME Shell or GTK APIs stays in `extension.ts` / `prefs.ts`.
 - **API details** (endpoints, auth, error handling, known 401/403/409/422
   behaviors) are documented in `PLAN.md` §2 — consult it before touching
   `src/lib/bamboohr.ts`.
-- **UUID** is `bamboo-timesheet@user`; settings schema
+- **UUID** is `bamboo-timesheet@alex.langs.berlin`; settings schema
   `org.gnome.shell.extensions.bamboo-timesheet`. Keep `metadata.json`,
   `install.sh`, and the schema filename in sync if it ever changes.
 - **Secrets:** the BambooHR API key lives in GSettings (user-entered via

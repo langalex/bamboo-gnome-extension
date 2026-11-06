@@ -29,9 +29,6 @@ import {
 } from "./lib/status.js";
 import type { ClockEntry } from "./lib/types.js";
 
-/** Role under which the indicator is registered in `Main.panel.statusArea`. */
-const PANEL_ROLE = "bamboo-timesheet";
-
 /**
  * Floor for the settings-driven refresh intervals; a zero/negative interval
  * would arm a zero-second timeout and hammer the API in a busy loop.
@@ -389,7 +386,7 @@ export default class BambooTimesheetExtension extends Extension {
       openPrefs: () => this.openPreferences(),
     });
     this.#indicator.showUnconfigured();
-    Main.panel.addToStatusArea(PANEL_ROLE, this.#indicator);
+    Main.panel.addToStatusArea(this.uuid, this.#indicator);
 
     // Start automatically once the prefs window saves a domain + key — no
     // enable/disable round-trip needed. Both keys may arrive in one `changed`
@@ -432,7 +429,7 @@ export default class BambooTimesheetExtension extends Extension {
       openBamboo: () => this.#openBamboo(),
       openPrefs: () => this.openPreferences(),
     });
-    Main.panel.addToStatusArea(PANEL_ROLE, this.#indicator);
+    Main.panel.addToStatusArea(this.uuid, this.#indicator);
 
     // Refresh whenever the popup opens so the rows and the live total are
     // current without waiting for the next timer tick. `Button.menu` is a

@@ -7,7 +7,7 @@
 # Requirements: node + npm (for the build), glib-compile-schemas, gnome-shell 51.
 set -euo pipefail
 
-UUID="bamboo-timesheet@user"
+UUID="bamboo-timesheet@alex.langs.berlin"
 EXT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/$UUID"
 
 cd "$(dirname "$0")"

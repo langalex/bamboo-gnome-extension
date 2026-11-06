@@ -18,6 +18,10 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)));
 const outdir = join(root, "dist");
 
+// `--release`: skip the inline source maps (published bundles ship without
+// them); dev builds keep them for readable stack traces under GJS.
+const release = process.argv.includes("--release");
+
 /** @type {import('esbuild').BuildOptions} */
 const common = {
   bundle: true,
@@ -25,7 +29,7 @@ const common = {
   platform: "neutral",
   target: ["es2022"],
   mainFields: ["module", "main"],
-  sourcemap: "inline",
+  sourcemap: release ? false : "inline",
   sourcesContent: false,
   logLevel: "info",
   // GJS resolves these at runtime; never bundle them.

@@ -1,9 +1,11 @@
 {
-  "uuid": "bamboo-timesheet@user",
+  "uuid": "bamboo-timesheet@alex.langs.berlin",
   "name": "BambooHR Timesheet",
   "description": "Shows your BambooHR clock-in status and today's time entries in the top bar.",
   "shell-version": ["51"],
-  "url": "https://example.invalid/bamboo-timesheet",
+  "url": "https://github.com/langalex/bamboo-gnome-extension",
+  "version": 1,
   "version-name": "0.1.0",
+  "license": "MIT",
   "settings-schema": "org.gnome.shell.extensions.bamboo-timesheet"
 }
