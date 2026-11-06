@@ -39,10 +39,19 @@ class Cancellable {
     this.#handlers.clear();
   }
 
-  /** GObject-style signal connection; only "cancelled" is meaningful here. */
-  connect(_signal: string, callback: () => void): number {
+  /**
+   * Mirrors the introspected g_cancellable_connect: Gio.Cancellable shadows
+   * GObject.connect, so the handler is the only argument. GObject-style
+   * ("cancelled", handler) throws — the real GJS runtime does too.
+   */
+  connect(handler: () => void): number {
+    if (typeof handler !== "function") {
+      throw new TypeError(
+        "Gio.Cancellable.connect takes the handler as its only argument",
+      );
+    }
     const id = this.#nextId++;
-    this.#handlers.set(id, callback);
+    this.#handlers.set(id, handler);
     return id;
   }
 
@@ -66,6 +75,9 @@ class Settings {
 const Gio = {
   Cancellable,
   Settings,
+  // GJS private helper used by src/lib/bamboohr.ts at module scope; the
+  // stubbed session methods are already promise-based, so this is a no-op.
+  _promisify(): void {},
   SettingsSchemaSource: {
     get_default: () => ({
       lookup: (id: string, recursive: boolean) => schemaLookup(id, recursive),

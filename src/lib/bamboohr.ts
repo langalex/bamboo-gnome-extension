@@ -1,6 +1,16 @@
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 import Soup from "gi://Soup?version=3.0";
+
+// GJS's implicit callback→Promise conversion for introspected async functions
+// is not guaranteed (it depends on the host environment; e.g. the plain `gjs`
+// runtime requires the callback). Promisify explicitly so the 3-argument
+// awaitable form below works everywhere.
+Gio._promisify(
+  Soup.Session.prototype,
+  "send_and_read_async",
+  "send_and_read_finish",
+);
 import type {
   ClockEntriesResponse,
   ClockEntry,
@@ -145,12 +155,17 @@ export class BambooClient {
     const cancellable = new Gio.Cancellable();
     // Chain the caller's token (a superseding request or disable()) into this
     // request's cancellable, which also carries the timeout below.
+    //
+    // Gio.Cancellable shadows GObject.connect with g_cancellable_connect():
+    // the handler is the ONLY argument. The GObject-style 2-argument form
+    // ("cancelled", handler) makes GJS read "cancelled" as the callback and
+    // throw "Expected function for callback argument callback, got string".
     let parentId = 0;
     if (parent) {
       if (parent.is_cancelled()) {
         cancellable.cancel();
       } else {
-        parentId = parent.connect("cancelled", () => cancellable.cancel());
+        parentId = parent.connect(() => cancellable.cancel());
       }
     }
     let timedOut = false;
