@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-06
+
+### Added
+
+- Weekly total in the popup: a "Total this week" row alongside the daily
+  total, computed Monday-based per entry timezone and including the live
+  open entry. The API fetch window is widened back to Monday so the week
+  total has data.
+
+### Changed
+
+- The About row in the preferences dialog now reads the version from
+  `metadata.json` (`version-name`) instead of a hardcoded string, so it no
+  longer goes stale on releases.
+
 ## [0.2.0] - 2026-11-06
 
 ### Added
@@ -44,5 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-entry timezone handling: "today" is computed using each entry's own
   IANA timezone to avoid midnight-rollover bugs.
 
+[0.3.0]: https://github.com/langalex/bamboo-gnome-extension/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/langalex/bamboo-gnome-extension/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/langalex/bamboo-gnome-extension/releases/tag/0.1.0
