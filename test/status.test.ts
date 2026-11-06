@@ -105,6 +105,10 @@ describe("summarizeToday", () => {
     expect(s.entries.map((e) => e.id)).toEqual([1, 2]);
     // 2.5h + 2h closed + 55m live.
     expect(s.totalMs).toBe((2.5 + 2) * 3_600_000 + 55 * 60_000);
+    // Week (Mon Mar 16 – Sun Mar 22): yesterday's 8h + today's 4.5h + 55m live.
+    expect(s.weekTotalMs).toBe(
+      8 * 3_600_000 + (2.5 + 2) * 3_600_000 + 55 * 60_000,
+    );
   });
 
   it("sorts today's entries by start time regardless of input order", () => {
@@ -214,6 +218,43 @@ describe("summarizeToday", () => {
 
     expect(s.clockedIn).toBe(true);
     expect(s.openEntry?.id).toBe(8);
+  });
+
+  it("counts week totals from Monday, excluding last week's entries", () => {
+    // now is Tuesday Mar 17, 2026; the week starts Monday Mar 16.
+    const lastSunday = entry(
+      10,
+      "2026-03-15T09:00:00-06:00",
+      "2026-03-15T17:00:00-06:00",
+      { hours: 8 },
+    );
+    const monday = entry(
+      11,
+      "2026-03-16T09:00:00-06:00",
+      "2026-03-16T17:00:00-06:00",
+      { hours: 8 },
+    );
+    const tuesday = entry(
+      12,
+      "2026-03-17T09:00:00-06:00",
+      "2026-03-17T11:30:00-06:00",
+      { hours: 2.5 },
+    );
+
+    const s = summarizeToday([lastSunday, monday, tuesday], now);
+
+    expect(s.totalMs).toBe(2.5 * 3_600_000);
+    expect(s.weekTotalMs).toBe(10.5 * 3_600_000);
+  });
+
+  it("excludes an open entry from the week total when its date is last week", () => {
+    // Open since Sunday Mar 15 22:00, still running Tuesday Mar 16:00.
+    const openSinceSunday = entry(13, "2026-03-15T22:00:00-06:00", null);
+
+    const s = summarizeToday([openSinceSunday], now);
+
+    expect(s.totalMs).toBe(42 * 3_600_000);
+    expect(s.weekTotalMs).toBe(0);
   });
 });
 
