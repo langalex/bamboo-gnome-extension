@@ -322,6 +322,10 @@ const BambooIndicator = GObject.registerClass(
       const openItem = new PopupMenuItem("Open BambooHR");
       openItem.connect("activate", () => this._actions?.openBamboo());
       menu.addMenuItem(openItem);
+
+      const settingsItem = new PopupMenuItem("Settings…");
+      settingsItem.connect("activate", () => this._actions?.openPrefs());
+      menu.addMenuItem(settingsItem);
     }
   },
 );
