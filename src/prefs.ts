@@ -1,6 +1,7 @@
 import Adw from "gi://Adw";
 import Gio from "gi://Gio";
 import Gtk from "gi://Gtk";
+import Pango from "gi://Pango";
 import { ExtensionPreferences } from "@girs/gnome-shell/extensions/prefs";
 import { loadSettings, SettingsKeys } from "./lib/settings.js";
 
@@ -50,8 +51,10 @@ export default class BambooTimesheetPreferences extends ExtensionPreferences {
       title: "Account",
       description:
         "Your BambooHR company subdomain and a personal API key. " +
-        "Get the key from BambooHR: click your avatar in the bottom-left " +
-        "corner → API Keys. The key is stored as plain text in GSettings.",
+        'The domain is only the subdomain, e.g. "mycompany" for ' +
+        "https://mycompany.bamboohr.com. Get the API key from BambooHR: " +
+        "click your avatar in the bottom-left corner → API Keys. The key " +
+        "is stored as plain text in GSettings.",
     });
     companyPage.add(companyGroup);
     window.add(companyPage);
@@ -60,11 +63,18 @@ export default class BambooTimesheetPreferences extends ExtensionPreferences {
       title: "Company domain",
       text: settings.get_string(SettingsKeys.CompanyDomain),
     });
+    // Keep the suffix hint very short: a long unbreakable label here raises
+    // the row's minimum width beyond the page clamp, which pushed the boxed
+    // list into the window's right margin (and squeezed the entry text) at
+    // narrow window sizes. The full guidance lives in the group description,
+    // which wraps freely.
     const domainHelper = new Gtk.Label({
-      label:
-        'Only the subdomain, e.g. "mycompany" for https://mycompany.bamboohr.com',
+      label: 'e.g. "mycompany"',
+      ellipsize: Pango.EllipsizeMode.END,
+      max_width_chars: 18,
     });
     domainHelper.add_css_class("dim-label");
+    domainHelper.set_valign(Gtk.Align.CENTER);
     domainRow.add_suffix(domainHelper);
     domainRow.set_show_apply_button(true);
     domainRow.connect("apply", () => {
