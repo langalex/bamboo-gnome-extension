@@ -16,6 +16,18 @@ export function setSchemaLookup(fn: SchemaLookup): void {
   schemaLookup = fn;
 }
 
+let schemaDirLookup: ((dir: string) => SchemaLookup | null) | null = null;
+
+/**
+ * Script what `SettingsSchemaSource.new_from_directory(dir)` yields: the
+ * callback returns the schema lookup for `dir`, or null for an empty dir.
+ */
+export function setSchemaDirLookup(
+  fn: ((dir: string) => SchemaLookup | null) | null,
+): void {
+  schemaDirLookup = fn;
+}
+
 class Cancellable {
   #cancelled = false;
   #handlers = new Map<number, () => void>();
@@ -57,6 +69,15 @@ const Gio = {
   SettingsSchemaSource: {
     get_default: () => ({
       lookup: (id: string, recursive: boolean) => schemaLookup(id, recursive),
+    }),
+    // Mirrors GI source chaining: schemas dir first, then the parent source
+    // (when lookup is called with recursive=true).
+    new_from_directory: (dir: string, _parent: unknown, _trusted: boolean) => ({
+      lookup: (id: string, recursive: boolean): FakeSchema | null => {
+        const dirHit = schemaDirLookup?.(dir)?.(id, recursive) ?? null;
+        if (dirHit) return dirHit;
+        return recursive ? schemaLookup(id, recursive) : null;
+      },
     }),
   },
 } as const;

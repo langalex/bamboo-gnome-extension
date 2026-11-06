@@ -24,17 +24,29 @@ export interface BambooSettings {
 }
 
 /**
- * Read the extension's GSettings. The GNOME 51 extension loader resolves the
- * schema from `extensionsdir/schemas` (the dev-installed compiled schema);
- * pass `true` to force reading from the default schema source instead.
+ * Read the extension's GSettings.
+ *
+ * The schema is compiled into `extensionsdir/schemas`, which is NOT part of
+ * the default schema source (that only covers system-wide directories). Callers
+ * pass the extension's schemas dir — `this.dir.get_child("schemas").get_path()`
+ * on `Extension` / `ExtensionPreferences`. The default source stays chained as
+ * a parent, so a schema installed system-wide (packaged extension) also
+ * resolves, mirroring gnome-shell's own ExtensionBase.getSettings().
  */
-export function loadSettings(forceDefault = false): Gio.Settings {
-  const schemaSource = Gio.SettingsSchemaSource.get_default();
+export function loadSettings(schemasDir?: string | null): Gio.Settings {
+  const defaultSource = Gio.SettingsSchemaSource.get_default();
+  const schemaSource = schemasDir
+    ? Gio.SettingsSchemaSource.new_from_directory(
+        schemasDir,
+        defaultSource,
+        false,
+      )
+    : defaultSource;
   const schema = schemaSource?.lookup(SCHEMA_ID, true);
-  if (schema && !forceDefault) {
-    return new Gio.Settings({ settings_schema: schema });
+  if (!schema) {
+    throw new Error(`GSettings schema ${SCHEMA_ID} not found`);
   }
-  throw new Error(`GSettings schema ${SCHEMA_ID} not found`);
+  return new Gio.Settings({ settings_schema: schema });
 }
 
 /** Read all settings into a plain object. */

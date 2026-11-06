@@ -37,7 +37,7 @@ function makeSpinRow(
 /** Adw 1 preferences dialog bound to the extension's GSettings schema. */
 export default class BambooTimesheetPreferences extends ExtensionPreferences {
   override fillPreferencesWindow(window: Adw.PreferencesWindow): Promise<void> {
-    const settings = loadSettings();
+    const settings = loadSettings(this.dir.get_child("schemas").get_path());
 
     // ---- Company page ------------------------------------------------------
     const companyPage = new Adw.PreferencesPage({

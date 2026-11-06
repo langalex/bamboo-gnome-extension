@@ -357,7 +357,7 @@ export default class BambooTimesheetExtension extends Extension {
   #authFailed = false;
 
   override enable(): void {
-    const settings = loadSettings();
+    const settings = loadSettings(this.dir.get_child("schemas").get_path());
     const cfg = getSettings(settings);
     this.#settings = settings;
 

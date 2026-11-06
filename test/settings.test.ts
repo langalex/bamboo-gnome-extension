@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { getSettings, loadSettings, SettingsKeys } from "../src/lib/settings.js";
-import { setSchemaLookup } from "./mocks/gio.js";
+import {
+  getSettings,
+  loadSettings,
+  SettingsKeys,
+} from "../src/lib/settings.js";
+import { setSchemaDirLookup, setSchemaLookup } from "./mocks/gio.js";
 
 /** Duck-typed Gio.Settings stand-in backed by a plain map. */
 function fakeSettings(values: Partial<Record<string, string | number>>) {
@@ -12,6 +16,7 @@ function fakeSettings(values: Partial<Record<string, string | number>>) {
 
 beforeEach(() => {
   setSchemaLookup(() => null);
+  setSchemaDirLookup(() => null);
 });
 
 describe("getSettings", () => {
@@ -37,9 +42,7 @@ describe("getSettings", () => {
   });
 
   it("reports configured=false when the domain is missing", () => {
-    const s = getSettings(
-      fakeSettings({ [SettingsKeys.ApiKey]: "secret" }),
-    );
+    const s = getSettings(fakeSettings({ [SettingsKeys.ApiKey]: "secret" }));
     expect(s.configured).toBe(false);
   });
 
@@ -68,12 +71,10 @@ describe("loadSettings", () => {
   const SCHEMA_ID = "org.gnome.shell.extensions.bamboo-timesheet";
 
   it("throws a clear error when the schema is not installed", () => {
-    setSchemaLookup(() => null);
-
     expect(() => loadSettings()).toThrow(SCHEMA_ID);
   });
 
-  it("returns a Settings object bound to the looked-up schema", () => {
+  it("returns a Settings object bound to the default-source schema", () => {
     const schema = { id: SCHEMA_ID };
     setSchemaLookup((id) => (id === SCHEMA_ID ? schema : null));
 
@@ -82,7 +83,31 @@ describe("loadSettings", () => {
     expect(settings.schema).toBe(schema);
   });
 
-  it("forceDefault still requires the schema to be installed", () => {
-    expect(() => loadSettings(true)).toThrow(SCHEMA_ID);
+  it("looks the schema up in the given schemas directory", () => {
+    const schema = { id: SCHEMA_ID };
+    const seenDirs: string[] = [];
+    setSchemaDirLookup((dir) => {
+      seenDirs.push(dir);
+      return (id) => (id === SCHEMA_ID ? schema : null);
+    });
+
+    const settings = loadSettings("/ext/schemas");
+
+    expect(seenDirs).toEqual(["/ext/schemas"]);
+    expect(settings.schema).toBe(schema);
+  });
+
+  it("falls back to the default source when the directory has no schema", () => {
+    const schema = { id: SCHEMA_ID };
+    setSchemaDirLookup(() => null);
+    setSchemaLookup((id) => (id === SCHEMA_ID ? schema : null));
+
+    const settings = loadSettings("/ext/schemas");
+
+    expect(settings.schema).toBe(schema);
+  });
+
+  it("throws when neither the directory nor the default source has it", () => {
+    expect(() => loadSettings("/ext/schemas")).toThrow(SCHEMA_ID);
   });
 });
