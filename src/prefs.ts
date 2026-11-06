@@ -16,9 +16,11 @@ function makeSpinRow(
     page: number;
   },
 ): Adw.SpinRow {
+  // GTK4 construct params reject `undefined` values, so only pass `subtitle`
+  // when it was provided.
   const row = new Adw.SpinRow({
     title: opts.title,
-    subtitle: opts.subtitle,
+    ...(opts.subtitle !== undefined ? { subtitle: opts.subtitle } : {}),
   });
   const adjustment = new Gtk.Adjustment({
     lower: opts.min,
